@@ -1,4 +1,3 @@
-<!-- index.html -->
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -6,16 +5,159 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Aplicación AR PlayCanvas</title>
     <style>
-        body { margin: 0; overflow: hidden; }
+        body { margin: 0; overflow: hidden; font-family: Arial, sans-serif; }
         canvas { width: 100%; height: 100%; }
-        button { position: absolute; z-index: 10; margin: 10px; }
+        #ui { position: absolute; top: 10px; left: 10px; z-index: 100; }
+        button { margin: 5px; padding: 10px; font-size: 16px; }
+        #status { background-color: rgba(0,0,0,0.5); color: white; padding: 10px; margin-top: 10px; }
     </style>
 </head>
 <body>
-    <!-- Asegúrate de que esta ruta sea correcta -->
+    <div id="ui">
+        <button id="arButton">Iniciar AR</button>
+        <button id="rotateLeft">Rotar Izquierda</button>
+        <button id="rotateRight">Rotar Derecha</button>
+        <button id="scaleUp">Aumentar Tamaño</button>
+        <button id="scaleDown">Reducir Tamaño</button>
+        <div id="status">Estado: Esperando iniciar AR</div>
+    </div>
     <script src="https://code.playcanvas.com/playcanvas-stable.min.js"></script>
-    <!-- El script.js debe estar en el mismo directorio que este archivo HTML -->
-    <script src="script.js"></script>
+    <script>
+    document.addEventListener('DOMContentLoaded', function () {
+        console.log('DOM cargado, iniciando aplicación...');
+
+        var canvas = document.createElement('canvas');
+        document.body.appendChild(canvas);
+
+        var app = new pc.Application(canvas, {
+            mouse: new pc.Mouse(canvas),
+            touch: new pc.TouchDevice(canvas)
+        });
+
+        app.start();
+        app.setCanvasFillMode(pc.FILLMODE_FILL_WINDOW);
+        app.setCanvasResolution(pc.RESOLUTION_AUTO);
+
+        var camera = new pc.Entity("Camera");
+        camera.addComponent("camera", {
+            clearColor: new pc.Color(0.5, 0.6, 0.9),
+            farClip: 1000
+        });
+        camera.setPosition(0, 0, 5);
+        app.root.addChild(camera);
+
+        var light = new pc.Entity("Directional Light");
+        light.addComponent("light", {
+            type: "directional",
+            color: new pc.Color(1, 1, 1),
+            castShadows: true,
+            intensity: 1.5
+        });
+        light.setEulerAngles(45, 30, 0);
+        app.root.addChild(light);
+
+        var ambientLight = new pc.Entity("Ambient Light");
+        ambientLight.addComponent("light", {
+            type: "ambient",
+            color: new pc.Color(0.2, 0.2, 0.2),
+            intensity: 0.8
+        });
+        app.root.addChild(ambientLight);
+
+        var box = new pc.Entity("Box");
+        box.addComponent("render", {
+            type: "box"
+        });
+        box.setLocalScale(0.5, 0.5, 0.5);
+        box.setPosition(0, 0, -1);
+        app.root.addChild(box);
+
+        var material = new pc.StandardMaterial();
+        material.diffuse.set(1, 0, 0);
+        material.update();
+        box.render.material = material;
+
+        var arButton = document.getElementById('arButton');
+        var statusDiv = document.getElementById('status');
+
+        function updateStatus(message) {
+            statusDiv.textContent = "Estado: " + message;
+            console.log(message);
+        }
+
+        function startAR() {
+            updateStatus("Comprobando soporte AR...");
+            if (navigator.xr) {
+                navigator.xr.isSessionSupported('immersive-ar').then((supported) => {
+                    if (supported) {
+                        updateStatus("AR soportado. Iniciando sesión...");
+                        navigator.xr.requestSession('immersive-ar', {
+                            requiredFeatures: ['hit-test']
+                        }).then(onSessionStarted).catch(error => {
+                            updateStatus("Error al iniciar sesión AR: " + error);
+                        });
+                    } else {
+                        updateStatus("AR no soportado en este dispositivo");
+                    }
+                });
+            } else {
+                updateStatus("WebXR no soportado en este navegador");
+            }
+        }
+
+        function onSessionStarted(session) {
+            updateStatus("Sesión AR iniciada");
+            app.xr.start(camera.camera, pc.XRTYPE_AR, pc.XRSPACE_LOCALFLOOR).then(() => {
+                updateStatus("AR activo. Toca la pantalla para colocar el objeto.");
+                session.addEventListener('select', onSelect);
+            }).catch(error => {
+                updateStatus("Error al iniciar XR: " + error);
+            });
+        }
+
+        function onSelect(event) {
+            updateStatus("Colocando objeto...");
+            const frame = event.frame;
+            const referenceSpace = app.xr.referenceSpace;
+            
+            if (frame.getHitTestResults) {
+                const hitTestResults = frame.getHitTestResults(session.requestHitTestSource({space: referenceSpace}));
+                if (hitTestResults.length) {
+                    const hitPose = hitTestResults[0].getPose(referenceSpace);
+                    box.setPosition(hitPose.transform.position.x, hitPose.transform.position.y, hitPose.transform.position.z);
+                    updateStatus("Objeto colocado. Puedes interactuar con él.");
+                }
+            }
+        }
+
+        arButton.addEventListener('click', startAR);
+
+        document.getElementById('rotateLeft').addEventListener('click', function() {
+            box.rotate(0, 45, 0);
+        });
+
+        document.getElementById('rotateRight').addEventListener('click', function() {
+            box.rotate(0, -45, 0);
+        });
+
+        document.getElementById('scaleUp').addEventListener('click', function() {
+            box.setLocalScale(box.getLocalScale().scale(1.2));
+        });
+
+        document.getElementById('scaleDown').addEventListener('click', function() {
+            box.setLocalScale(box.getLocalScale().scale(0.8));
+        });
+
+        app.on("update", function (dt) {
+            // Aquí puedes añadir lógica de actualización si es necesario
+        });
+
+        window.addEventListener('resize', function () {
+            app.resizeCanvas();
+        });
+
+        updateStatus("Aplicación lista. Pulsa 'Iniciar AR' para comenzar.");
+    });
+    </script>
 </body>
 </html>
-
