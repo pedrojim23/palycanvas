@@ -10,17 +10,20 @@
         #ui { position: absolute; top: 10px; left: 10px; z-index: 100; }
         button { margin: 5px; padding: 10px; font-size: 16px; }
         #status { background-color: rgba(0,0,0,0.5); color: white; padding: 10px; margin-top: 10px; }
+        #debug { position: absolute; bottom: 10px; left: 10px; right: 10px; background-color: rgba(0,0,0,0.5); color: white; padding: 10px; font-size: 12px; }
     </style>
 </head>
 <body>
     <div id="ui">
         <button id="arButton">Iniciar AR</button>
+        <button id="nonArButton" style="display:none;">Modo sin AR</button>
         <button id="rotateLeft">Rotar Izquierda</button>
         <button id="rotateRight">Rotar Derecha</button>
         <button id="scaleUp">Aumentar Tamaño</button>
         <button id="scaleDown">Reducir Tamaño</button>
         <div id="status">Estado: Esperando iniciar AR</div>
     </div>
+    <div id="debug"></div>
     <script src="https://code.playcanvas.com/playcanvas-stable.min.js"></script>
     <script>
     document.addEventListener('DOMContentLoaded', function () {
@@ -78,41 +81,62 @@
         box.render.material = material;
 
         var arButton = document.getElementById('arButton');
+        var nonArButton = document.getElementById('nonArButton');
         var statusDiv = document.getElementById('status');
+        var debugDiv = document.getElementById('debug');
 
         function updateStatus(message) {
             statusDiv.textContent = "Estado: " + message;
             console.log(message);
         }
 
+        function updateDebug(message) {
+            debugDiv.innerHTML += message + "<br>";
+            console.log("Debug:", message);
+        }
+
         function startAR() {
             updateStatus("Comprobando soporte AR...");
+            updateDebug("Iniciando proceso AR");
             if (navigator.xr) {
-                navigator.xr.isSessionSupported('immersive-ar').then((supported) => {
-                    if (supported) {
-                        updateStatus("AR soportado. Iniciando sesión...");
-                        navigator.xr.requestSession('immersive-ar', {
-                            requiredFeatures: ['hit-test']
-                        }).then(onSessionStarted).catch(error => {
-                            updateStatus("Error al iniciar sesión AR: " + error);
-                        });
-                    } else {
-                        updateStatus("AR no soportado en este dispositivo");
-                    }
-                });
+                updateDebug("navigator.xr está disponible");
+                navigator.xr.isSessionSupported('immersive-ar')
+                    .then((supported) => {
+                        if (supported) {
+                            updateStatus("AR soportado. Iniciando sesión...");
+                            updateDebug("AR es soportado, solicitando sesión");
+                            return navigator.xr.requestSession('immersive-ar', {
+                                requiredFeatures: ['hit-test']
+                            });
+                        } else {
+                            throw new Error("AR no soportado en este dispositivo");
+                        }
+                    })
+                    .then(onSessionStarted)
+                    .catch(error => {
+                        updateStatus("Error al iniciar sesión AR: " + error.message);
+                        updateDebug("Error detallado: " + error.stack);
+                        nonArButton.style.display = 'inline-block';
+                    });
             } else {
                 updateStatus("WebXR no soportado en este navegador");
+                updateDebug("navigator.xr no está disponible");
+                nonArButton.style.display = 'inline-block';
             }
         }
 
         function onSessionStarted(session) {
             updateStatus("Sesión AR iniciada");
-            app.xr.start(camera.camera, pc.XRTYPE_AR, pc.XRSPACE_LOCALFLOOR).then(() => {
-                updateStatus("AR activo. Toca la pantalla para colocar el objeto.");
-                session.addEventListener('select', onSelect);
-            }).catch(error => {
-                updateStatus("Error al iniciar XR: " + error);
-            });
+            updateDebug("Sesión AR iniciada correctamente");
+            app.xr.start(camera.camera, pc.XRTYPE_AR, pc.XRSPACE_LOCALFLOOR)
+                .then(() => {
+                    updateStatus("AR activo. Toca la pantalla para colocar el objeto.");
+                    session.addEventListener('select', onSelect);
+                })
+                .catch(error => {
+                    updateStatus("Error al iniciar XR: " + error.message);
+                    updateDebug("Error detallado al iniciar XR: " + error.stack);
+                });
         }
 
         function onSelect(event) {
@@ -130,7 +154,14 @@
             }
         }
 
+        function startNonAR() {
+            updateStatus("Modo sin AR iniciado");
+            box.setPosition(0, 0, -3);
+            camera.setPosition(0, 0, 0);
+        }
+
         arButton.addEventListener('click', startAR);
+        nonArButton.addEventListener('click', startNonAR);
 
         document.getElementById('rotateLeft').addEventListener('click', function() {
             box.rotate(0, 45, 0);
@@ -157,6 +188,8 @@
         });
 
         updateStatus("Aplicación lista. Pulsa 'Iniciar AR' para comenzar.");
+        updateDebug("Versión de PlayCanvas: " + pc.version);
+        updateDebug("User Agent: " + navigator.userAgent);
     });
     </script>
 </body>
